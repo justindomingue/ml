@@ -1,7 +1,20 @@
 #!/usr/bin/python
 
 # Linear regression library
-# Implements gradient descent and extensions of it
+#
+# Note. Not ready for production -- it was mostly an exercise for me
+#       I did use it in a school project with excellent results however.
+#
+# Models:
+#   - Linear regression
+#   - Ridge regression
+#
+# Optimization algorithms used:
+#   - Batch gradient descent
+#   - Mini-batch gradient descent
+#
+# Extra:
+#   - k-fold cross validation
 #
 # The excellent Coursera online course on Linear Regression by Emily Fox and Carlos Guestrin
 # from the University of Washington (https://www.coursera.org/learn/ml-regression) has
@@ -56,12 +69,15 @@ def feature_derivative_ridge(errors, feature, weight, l2_penalty, feature_is_con
 
     return derivative
 
-def ridge_regression_gradient_descent(feature_matrix, output, initial_weights, step_size, l2_penalty, max_iterations=100, verbose=True):
+def ridge_regression_gradient_descent(feature_matrix, output, initial_weights, step_size, l2_penalty, max_iterations=100, verbose=True, plot=False):
+    print 'Ridge regression with step_size={}, l2_penalty={}'.format(step_size, l2_penalty)
+
     weights = np.array(initial_weights)
     batch_size = 256
 
     j = []
-    for _ in range(max_iterations):
+    for iteration in range(max_iterations):
+        j.append(0)
 
         # Shuffle data
         feature_matrix, output = shuffle_in_unison_inplace(feature_matrix, output)
@@ -78,10 +94,8 @@ def ridge_regression_gradient_descent(feature_matrix, output, initial_weights, s
             predictions = predict_output(batch_feature_matrix, weights)
             errors = predictions - batch_output
 
-            j.append(rss(predictions, batch_output))
-
-            if verbose:
-                print('Error: {}'.format(rss(predictions, batch_output)))
+            if plot or (verbose and (iteration%10)==0):
+                j[iteration] += rss(predictions, batch_output)
 
             for i in xrange(len(weights)):   # update each feature's weight
                 feature_is_constant = i==0  # do not regularize the intercept
@@ -89,11 +103,16 @@ def ridge_regression_gradient_descent(feature_matrix, output, initial_weights, s
 
                 weights[i] = weights[i] - derivative * step_size
 
-    # import matplotlib.pyplot as plot
-    # x = range(max_iterations)
-    # y = j
-    # plot.plot(x,y)
-    # plot.show()
+        if verbose and (iteration%10)==0:
+            print 'Error at iteration {}: {}'.format(iteration, j[iteration]/feature_matrix.shape[0])
+
+    if plot:
+        import matplotlib.pyplot as plot
+        x = range(max_iterations)
+        y = j
+        plot.plot(x,y)
+        plot.show()
+
     return(weights)
 
 # ----- CROSS VALIDATION ------
@@ -110,6 +129,8 @@ def ridge_k_fold_cross_validation(k, l2_penalty, feature_matrix, output, step_si
     :param output: output vector
     :return: average validation error using k segments as validation sets
     '''
+
+    print 'Ridge {}-fold cross validation on l2_penalty={}'.format(k, l2_penalty)
 
     # set some paramaters
     n = len(feature_matrix)
@@ -151,7 +172,7 @@ def ridge_k_fold_cross_validation(k, l2_penalty, feature_matrix, output, step_si
 
     return running_val_error/k
 
-def run_ridge_cross_validate(l2_penalty_space, feature_matrix, output, step_size=1e-12, max_iterations=1000, plot=False):
+def run_ridge_cross_validate(l2_penalty_space, feature_matrix, output, k=10, step_size=1e-12, max_iterations=1000, plot=False):
     """ Find the model that minimizes the average validation error
     :param l2_penalty_space: Array. l2_penalty values to try, e.g. np.logspace(1,7,num=13)
     :param feature_matrix:
@@ -159,11 +180,14 @@ def run_ridge_cross_validate(l2_penalty_space, feature_matrix, output, step_size
     :param plot: if True, plots the l2_penalty space in the x axis and the cross-validation error in the y axis
     :return optimal l2_penalty in `l2_penalty_space`
     """
+
+    print 'Running ridge cross validation with values {}'.format(l2_penalty_space)
+
     errors=[]
     lowest_error = float("inf")
     optimal_l2_penalty = None
     for l2_penalty in l2_penalty_space:
-        error = ridge_k_fold_cross_validation(10, l2_penalty, feature_matrix, output, step_size=step_size, max_iterations=max_iterations)
+        error = ridge_k_fold_cross_validation(k, l2_penalty, feature_matrix, output, step_size=step_size, max_iterations=max_iterations)
         errors.append(error)
 
         if error < lowest_error:
@@ -192,6 +216,9 @@ def predict_output(feature_matrix, weights):
 
 def rss(predictions, actual):
     return ((predictions-actual)**2).sum()
+
+def avg_prediction_error(predictions, actual):
+    return (predictions-actual).sum() / len(predictions)
 
 def rsquared(predictions, actual):
     """ Quotient of the variances of the fitted values and observed values of the dependent variable """
