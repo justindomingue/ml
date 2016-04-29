@@ -5,11 +5,14 @@
 
 import math
 import numpy as np
+import regression
+
 
 def sigmoid(t, deriv=False):
     if deriv:
-        return t*(1-t)
-    return 1/(1+np.exp(-t))
+        return t * (1 - t)
+    return 1 / (1 + np.exp(-t))
+
 
 def nn_2layers(X, y, iterations=100):
     """ Trains a simple 2-layer neural network on feature matrix `X` and outcomes `y`
@@ -20,10 +23,9 @@ def nn_2layers(X, y, iterations=100):
     num_features = X.shape[1]
 
     # initialize synapse 0 randomly with mean 0
-    syn0 = 2*np.random.random((num_features,1))-1
+    syn0 = 2 * np.random.random((num_features, 1)) - 1
 
     for _ in xrange(iterations):
-
         # forward propagation
         l1 = sigmoid(np.dot(X, syn0))
 
@@ -36,7 +38,8 @@ def nn_2layers(X, y, iterations=100):
 
     return [syn0]
 
-def neural_network_with_shapes(X, y, neurons_per_layer, iterations=100000, verbose=False):
+
+def neural_network_with_shapes(X, y, neurons_per_layer, iterations=100000, verbose=False, plot=False):
     """ Trains an `n`-layer neural network on feature matrix `X` and outcomes `y`
     :param X: input feature matrix where rows are observation and columns are features
     :param y: outcome associated to each observation in `X`
@@ -74,7 +77,7 @@ def neural_network_with_shapes(X, y, neurons_per_layer, iterations=100000, verbo
 
         Now the fun part. Build and train a neural network with the structures you just defined.
         `neural_network_with_shapes()` with return the matrix of weights (all the synapses)
-        >>> weights = neural_network_with_shapes(X, y, neurons_per_layer=neurons, iterations=100)
+        >>> weights = neural_network_with_shapes(X, y, neurons_per_layer=neurons, iterations=100, verbose=False, plot=True)
 
         To use the network, call `forward_propagation` with the weights you just trained.
         >>> print predict(X, weights)
@@ -84,16 +87,19 @@ def neural_network_with_shapes(X, y, neurons_per_layer, iterations=100000, verbo
          [ 0.90488084]]
     """
 
-    num_synapses = len(neurons_per_layer)-1  # number of synapses in the nn (consequently, there are `num_synapses+1` layers.
-    synapses = []                            # list of matrix of weights connecting layer i and i+1
+    num_synapses = len(neurons_per_layer) - 1  # number of synapses in the nn (consequently, there are `num_synapses+1` layers.
+    synapses = []  # list of matrix of weights connecting layer i and i+1
+    errors = []
 
     # initialize weights randomly with mean 0
     for i in xrange(num_synapses):
-        shape = (neurons_per_layer[i], neurons_per_layer[i+1])
-        synapses.append(2*np.random.random(shape)-1)
+        shape = (neurons_per_layer[i], neurons_per_layer[i + 1])
+        synapses.append(2 * np.random.random(shape) - 1)
 
     # train the network
     for j in xrange(iterations):
+
+        # X,y = regression.shuffle_in_unison_inplace(X,y)
 
         # FORWARD PROPAGATION
         layers = forward_propagation(X, synapses)
@@ -104,30 +110,49 @@ def neural_network_with_shapes(X, y, neurons_per_layer, iterations=100000, verbo
         ln = layers[-1]
         ln_error = y - ln
 
-        if verbose and j%10000 == 0:
+        if verbose and j % 10 == 0:
             print "Error: {}".format(np.mean(np.abs(ln_error)))
+        if plot:
+            errors.append((ln_error ** 2).sum())
 
+        s = sigmoid(ln, deriv=True)
         delta = ln_error * sigmoid(ln, deriv=True)
 
         # then update every preceding layers
         for i in reversed(xrange(num_synapses)):
-            l_i = layers[i]
-            syn_i = synapses[i]
-
             # update the synapse based on succeeding layers
-            syn_i += l_i.T.dot(delta)
+            d = layers[i].T.dot(delta)
+            print d
+            synapses[i] += layers[i].T.dot(delta)
 
             # if we've reached the input layer
             if i == 0:
                 break
 
-            # how much did `l_i` contribute to the `l_i+1` error
-            error = delta.dot(syn_i.T)
+            # how much did `layers[i]` contribute to the `layers[i]+1` error
+            error = delta.dot(synapses[i].T)
 
             # error weighted derivative
-            delta = error * sigmoid(l_i, deriv=True)
+            delta = error * sigmoid(layers[i], deriv=True)
+
+    # if plot:
+    #     import matplotlib.pyplot as plot
+    #     plot.plot(range(iterations), errors)
+    #     plot.show()
 
     return synapses
+
+
+def error(a, y, f='quadratic'):
+    """Computes the error of the output `a` given true value `y`"""
+
+    if f is 'quadratic':
+        return y - a
+        # return ((y-a)**2)/2
+    if f is 'cross-entropy':
+        n = a.shape[0]
+        return -1 / n * (y * np.log(a) + (1 - y) * np.log(1 - a)).sum()
+
 
 def forward_propagation(X, synapses):
     """Performs feed forward propagation through layers 0, 1, ..., len(synapses)-1"""
@@ -135,6 +160,7 @@ def forward_propagation(X, synapses):
     for i in xrange(len(synapses)):
         layers.append(sigmoid(np.dot(layers[i], synapses[i])))
     return layers
+
 
 def predict(X, weights):
     return forward_propagation(X, weights)[-1]
